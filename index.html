@@ -24,7 +24,7 @@
     background: #16213e;
     border-radius: 20px;
     padding: 3rem;
-    max-width: 700px;
+    max-width: 600px;
     width: 100%;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     border: 1px solid #0f3460;
@@ -43,37 +43,20 @@
     padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem;
     margin-bottom: 1.5rem; text-align: center; width: 100%;
   }
-  .mode-tabs {
-    display: flex; gap: 0; margin-bottom: 1.5rem; border-radius: 10px; overflow: hidden;
-    border: 1px solid #0f3460;
+  .file-select-btn {
+    display: block; width: 100%; padding: 1.5rem; border: 2px dashed #0f3460;
+    border-radius: 16px; background: rgba(15,52,96,0.2); color: #aaa;
+    font-family: inherit; font-size: 1rem; cursor: pointer;
+    text-align: center; transition: all 0.3s; margin-bottom: 1rem;
   }
-  .mode-tab {
-    flex: 1; padding: 0.75rem; text-align: center; cursor: pointer;
-    background: transparent; color: #888; font-family: inherit; font-size: 0.9rem;
-    border: none; transition: all 0.3s;
+  .file-select-btn:hover { border-color: #e94560; background: rgba(233,69,96,0.1); color: #eee; }
+  .filename { color: #f5a623; font-weight: 700; text-align: center; margin-bottom: 1rem; min-height: 1.5rem; }
+  /* input[type=file] を見える状態にしてPADでクリック可能にする */
+  .file-input-visible {
+    display: block; width: 100%; margin-bottom: 1.5rem;
+    padding: 0.5rem; background: #1a1a2e; border: 1px solid #0f3460;
+    border-radius: 8px; color: #aaa; font-family: inherit;
   }
-  .mode-tab.active { background: #0f3460; color: #f5a623; font-weight: 700; }
-  .mode-section { display: none; }
-  .mode-section.active { display: block; }
-  .drop-zone {
-    border: 2px dashed #0f3460; border-radius: 16px; padding: 3rem 2rem;
-    text-align: center; cursor: pointer; transition: all 0.3s;
-    background: rgba(15, 52, 96, 0.2); margin-bottom: 1.5rem;
-  }
-  .drop-zone:hover, .drop-zone.dragover { border-color: #e94560; background: rgba(233, 69, 96, 0.1); }
-  .drop-zone .icon { font-size: 3rem; margin-bottom: 1rem; }
-  .drop-zone p { color: #aaa; font-size: 0.95rem; }
-  .drop-zone .filename { color: #f5a623; font-weight: 700; margin-top: 0.5rem; }
-  input[type="file"] { display: none; }
-  .path-input-group { margin-bottom: 1.5rem; }
-  .path-input-group label { display: block; color: #aaa; font-size: 0.85rem; margin-bottom: 0.5rem; }
-  .path-input {
-    width: 100%; padding: 0.85rem 1rem; border-radius: 10px; border: 1px solid #0f3460;
-    background: #1a1a2e; color: #eee; font-family: inherit; font-size: 0.95rem;
-    outline: none; transition: border-color 0.3s;
-  }
-  .path-input:focus { border-color: #e94560; }
-  .path-input::placeholder { color: #555; }
   .btn {
     display: block; width: 100%; padding: 1rem; border: none; border-radius: 12px;
     font-family: inherit; font-size: 1.1rem; font-weight: 700; cursor: pointer;
@@ -96,31 +79,12 @@
 <div class="container">
   <h1>📄 PDF → Excel 変換ツール</h1>
   <p class="subtitle">入力指示書PDFをExcelに変換します</p>
-  <div class="badge">🔧 PAD練習用 - 実際の業務では使わないでください</div>
+  <div class="badge">🔧 PAD練習用</div>
 
-  <div class="mode-tabs">
-    <button class="mode-tab active" data-mode="manual">手動(ドラッグ＆ドロップ)</button>
-    <button class="mode-tab" data-mode="pad">PAD連携(パス入力)</button>
-  </div>
-
-  <div class="mode-section active" id="manualMode">
-    <div class="drop-zone" id="dropZone">
-      <div class="icon">📁</div>
-      <p>PDFファイルをドラッグ＆ドロップ<br>またはクリックして選択</p>
-      <div class="filename" id="fileName"></div>
-    </div>
-    <input type="file" id="fileInput" accept=".pdf">
-    <button class="btn" id="convertBtn" disabled>変換してExcelをダウンロード</button>
-  </div>
-
-  <div class="mode-section" id="padMode">
-    <div class="path-input-group">
-      <label>PDFファイルのパスを入力:</label>
-      <input type="text" class="path-input" id="pdfPathInput" 
-             placeholder="C:\Users\PC\Desktop\...\【入力指示書】.pdf">
-    </div>
-    <button class="btn" id="padConvertBtn">PDF → Excel 変換</button>
-  </div>
+  <p style="color:#aaa; font-size:0.85rem; margin-bottom:0.5rem;">PDFファイルを選択してください:</p>
+  <input type="file" id="fileInput" accept=".pdf" class="file-input-visible">
+  <div class="filename" id="fileName"></div>
+  <button class="btn" id="convertBtn" disabled>変換してExcelをダウンロード</button>
 
   <div class="status" id="status"></div>
   <div class="preview" id="preview"></div>
@@ -129,61 +93,25 @@
 <script>
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput');
   const convertBtn = document.getElementById('convertBtn');
-  const padConvertBtn = document.getElementById('padConvertBtn');
-  const pdfPathInput = document.getElementById('pdfPathInput');
   const status = document.getElementById('status');
   const preview = document.getElementById('preview');
   const fileName = document.getElementById('fileName');
-  let selectedFile = null;
 
-  // Tab switching
-  document.querySelectorAll('.mode-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById(tab.dataset.mode === 'manual' ? 'manualMode' : 'padMode').classList.add('active');
-    });
-  });
-
-  // Manual mode
-  dropZone.addEventListener('click', () => fileInput.click());
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault(); dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-  });
-  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
-
-  function handleFile(file) {
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
     if (!file.name.endsWith('.pdf')) { showStatus('PDFファイルを選択してください', 'error'); return; }
-    selectedFile = file;
     fileName.textContent = file.name;
     convertBtn.disabled = false;
     showStatus('', '');
     preview.style.display = 'none';
-  }
-
-  convertBtn.addEventListener('click', () => { if (selectedFile) convertPdf(selectedFile); });
-
-  // PAD mode - file input triggers file dialog for PAD key send
-  padConvertBtn.addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.pdf';
-    input.onchange = (e) => {
-      if (e.target.files[0]) convertPdf(e.target.files[0]);
-    };
-    input.click();
   });
 
-  // Also support direct path display (PAD will use key send + enter for file dialog)
-  pdfPathInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') padConvertBtn.click();
+  convertBtn.addEventListener('click', () => {
+    const file = fileInput.files[0];
+    if (file) convertPdf(file);
   });
 
   function showStatus(msg, type) {
@@ -193,6 +121,7 @@
 
   async function convertPdf(file) {
     showStatus('変換中...', 'processing');
+    convertBtn.disabled = true;
     try {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -213,7 +142,7 @@
           if (texts.length >= 2) allRows.push(texts);
         }
       }
-      if (allRows.length === 0) { showStatus('テキストが見つかりませんでした', 'error'); return; }
+      if (allRows.length === 0) { showStatus('テキストが見つかりませんでした', 'error'); convertBtn.disabled = false; return; }
       const headers = allRows.map(r => r[0]);
       const values = allRows.map(r => r.slice(1).join(' '));
       const wb = XLSX.utils.book_new();
@@ -232,6 +161,7 @@
     } catch (err) {
       showStatus('変換エラー: ' + err.message, 'error');
     }
+    convertBtn.disabled = false;
   }
 </script>
 </body>

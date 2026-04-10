@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF → Excel 変換ツール(練習用)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    background: #1a1a2e;
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  
+  .container {
+    background: #16213e;
+    border-radius: 20px;
+    padding: 3rem;
+    max-width: 600px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    border: 1px solid #0f3460;
+  }
+  
+  h1 {
+    text-align: center;
+    font-size: 1.6rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, #e94560, #f5a623);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 0.85rem;
+    margin-bottom: 2rem;
+  }
+  
+  .drop-zone {
+    border: 2px dashed #0f3460;
+    border-radius: 16px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: rgba(15, 52, 96, 0.2);
+    margin-bottom: 1.5rem;
+  }
+  
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.1);
+  }
+  
+  .drop-zone .icon { font-size: 3rem; margin-bottom: 1rem; }
+  .drop-zone p { color: #aaa; font-size: 0.95rem; }
+  .drop-zone .filename { color: #f5a623; font-weight: 700; margin-top: 0.5rem; }
+  
+  input[type="file"] { display: none; }
+  
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: linear-gradient(135deg, #e94560, #c62a40);
+    color: white;
+  }
+  
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(233,69,96,0.4); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  
+  .status {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+    display: none;
+  }
+  
+  .status.success { display: block; background: rgba(46,204,113,0.15); color: #2ecc71; }
+  .status.error { display: block; background: rgba(233,69,96,0.15); color: #e94560; }
+  .status.processing { display: block; background: rgba(245,166,35,0.15); color: #f5a623; }
+  
+  .preview {
+    margin-top: 1.5rem;
+    overflow-x: auto;
+    display: none;
+  }
+  
+  .preview table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  
+  .preview th, .preview td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #0f3460;
+    text-align: left;
+  }
+  
+  .preview th { background: #0f3460; color: #f5a623; }
+  .preview td { background: #1a1a2e; }
+  
+  .badge {
+    display: inline-block;
+    background: #0f3460;
+    color: #e94560;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>📄 PDF → Excel 変換ツール</h1>
+  <p class="subtitle">入力指示書PDFをExcelに変換します</p>
+  <div class="badge">🔧 PAD練習用 - 実際の業務では使わないでください</div>
+  
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📁</div>
+    <p>PDFファイルをドラッグ＆ドロップ<br>またはクリックして選択</p>
+    <div class="filename" id="fileName"></div>
+  </div>
+  <input type="file" id="fileInput" accept=".pdf">
+  
+  <button class="btn" id="convertBtn" disabled>変換してExcelをダウンロード</button>
+  
+  <div class="status" id="status"></div>
+  
+  <div class="preview" id="preview"></div>
+</div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const convertBtn = document.getElementById('convertBtn');
+  const status = document.getElementById('status');
+  const preview = document.getElementById('preview');
+  const fileName = document.getElementById('fileName');
+  
+  let selectedFile = null;
+  
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  
+  function handleFile(file) {
+    if (!file.name.endsWith('.pdf')) {
+      showStatus('PDFファイルを選択してください', 'error');
+      return;
+    }
+    selectedFile = file;
+    fileName.textContent = file.name;
+    convertBtn.disabled = false;
+    showStatus('', '');
+    preview.style.display = 'none';
+  }
+  
+  function showStatus(msg, type) {
+    status.textContent = msg;
+    status.className = 'status' + (type ? ' ' + type : '');
+  }
+  
+  convertBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    
+    convertBtn.disabled = true;
+    showStatus('変換中...', 'processing');
+    
+    try {
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      const allRows = [];
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        
+        const rowMap = {};
+        textContent.items.forEach(item => {
+          const y = Math.round(item.transform[5]);
+          if (!rowMap[y]) rowMap[y] = [];
+          rowMap[y].push({ x: item.transform[4], text: item.str.trim() });
+        });
+        
+        const sortedYs = Object.keys(rowMap).map(Number).sort((a, b) => b - a);
+        
+        for (const y of sortedYs) {
+          const items = rowMap[y].sort((a, b) => a.x - b.x);
+          const texts = items.map(i => i.text).filter(t => t.length > 0);
+          if (texts.length >= 2) {
+            allRows.push(texts);
+          }
+        }
+      }
+      
+      if (allRows.length === 0) {
+        showStatus('テキストが見つかりませんでした', 'error');
+        convertBtn.disabled = false;
+        return;
+      }
+      
+      const headers = allRows.map(r => r[0]);
+      const values = allRows.map(r => r.slice(1).join(' '));
+      
+      const wb = XLSX.utils.book_new();
+      const wsData = [headers, values];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, '入力指示書');
+      
+      const outName = selectedFile.name.replace('.pdf', '.xlsx');
+      XLSX.writeFile(wb, outName);
+      
+      let tableHtml = '<table><tr>';
+      headers.forEach(h => tableHtml += `<th>${h}</th>`);
+      tableHtml += '</tr><tr>';
+      values.forEach(v => tableHtml += `<td>${v || '(空)'}</td>`);
+      tableHtml += '</tr></table>';
+      preview.innerHTML = tableHtml;
+      preview.style.display = 'block';
+      
+      showStatus(`✅ 変換完了！ ${outName} をダウンロードしました`, 'success');
+      
+    } catch (err) {
+      showStatus('変換エラー: ' + err.message, 'error');
+      console.error(err);
+    }
+    
+    convertBtn.disabled = false;
+  });
+</script>
+
+</body>
+</html>

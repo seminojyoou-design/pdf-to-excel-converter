@@ -80,6 +80,9 @@
   <p class="subtitle">入力指示書PDFをExcelに変換します</p>
   <div class="badge">🔧 PAD練習用</div>
 
+  <p style="color:#aaa; font-size:0.85rem; margin-bottom:0.5rem;">開くフォルダを指定(初回のみ):</p>
+  <button id="folderBtn" style="display:block;width:100%;padding:0.7rem;border:1px solid #0f3460;border-radius:8px;background:#1a1a2e;color:#f5a623;font-family:inherit;font-size:0.85rem;cursor:pointer;margin-bottom:1rem;text-align:left;">📂 未指定(デスクトップから開きます)</button>
+
   <p style="color:#aaa; font-size:0.85rem; margin-bottom:0.5rem;">PDFファイルを選択してください:</p>
   <input type="file" id="fileInput" accept=".pdf" class="file-input-visible">
   <div class="filename" id="fileName"></div>
@@ -94,20 +97,78 @@
 
   const fileInput = document.getElementById('fileInput');
   const convertBtn = document.getElementById('convertBtn');
+  const folderBtn = document.getElementById('folderBtn');
   const status = document.getElementById('status');
   const preview = document.getElementById('preview');
   const fileName = document.getElementById('fileName');
 
-  // input[type=file]のクリックを横取りしてshowOpenFilePickerを使う
-  // これでファイル選択ダイアログが毎回デスクトップから開く
+  let savedDirHandle = null;
+
+  // IndexedDBにフォルダハンドルを保存・読み込み
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('pdfConverterDB', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('handles');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function saveDirHandle(handle) {
+    const db = await openDB();
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'startDir');
+    return new Promise(r => { tx.oncomplete = r; });
+  }
+
+  async function loadDirHandle() {
+    const db = await openDB();
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('startDir');
+    return new Promise((resolve) => {
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  // 起動時に保存済みフォルダがあれば読み込む
+  (async () => {
+    savedDirHandle = await loadDirHandle();
+    if (savedDirHandle) {
+      folderBtn.textContent = '📂 ' + savedDirHandle.name + '(クリックで変更)';
+    }
+  })();
+
+  // フォルダ指定ボタン
+  folderBtn.addEventListener('click', async () => {
+    if (!window.showDirectoryPicker) {
+      alert('このブラウザはフォルダ指定に対応していません');
+      return;
+    }
+    try {
+      const dirHandle = await window.showDirectoryPicker({ startIn: 'desktop' });
+      savedDirHandle = dirHandle;
+      await saveDirHandle(dirHandle);
+      folderBtn.textContent = '📂 ' + dirHandle.name + '(クリックで変更)';
+    } catch (e) {
+      // キャンセル時は何もしない
+    }
+  });
+
+  // ファイル選択をshowOpenFilePickerに差し替え(保存済みフォルダから開く)
   fileInput.addEventListener('click', async function(e) {
-    if (!window.showOpenFilePicker) return; // 非対応ブラウザはそのまま標準動作
+    if (!window.showOpenFilePicker) return;
     e.preventDefault();
     try {
-      const [fileHandle] = await window.showOpenFilePicker({
-        startIn: 'desktop',
+      const opts = {
         types: [{ description: 'PDFファイル', accept: { 'application/pdf': ['.pdf'] } }]
-      });
+      };
+      if (savedDirHandle) {
+        opts.startIn = savedDirHandle;
+      } else {
+        opts.startIn = 'desktop';
+      }
+      const [fileHandle] = await window.showOpenFilePicker(opts);
       const file = await fileHandle.getFile();
       handleFile(file);
     } catch (err) {
@@ -115,7 +176,7 @@
     }
   });
 
-  // 標準のinput changeイベント(非対応ブラウザ用フォールバック)
+  // 標準input(非対応ブラウザ用フォールバック)
   fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) handleFile(file);
@@ -131,8 +192,6 @@
   }
 
   convertBtn.addEventListener('click', () => {
-    // showOpenFilePicker経由の場合はconvertBtn._selectedFileに入ってる
-    // 標準input経由の場合はfileInput.files[0]
     const file = convertBtn._selectedFile || fileInput.files[0];
     if (file) convertPdf(file);
   });

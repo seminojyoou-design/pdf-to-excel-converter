@@ -51,7 +51,6 @@
   }
   .file-select-btn:hover { border-color: #e94560; background: rgba(233,69,96,0.1); color: #eee; }
   .filename { color: #f5a623; font-weight: 700; text-align: center; margin-bottom: 1rem; min-height: 1.5rem; }
-  /* input[type=file] を見える状態にしてPADでクリック可能にする */
   .file-input-visible {
     display: block; width: 100%; margin-bottom: 1.5rem;
     padding: 0.5rem; background: #1a1a2e; border: 1px solid #0f3460;
@@ -99,18 +98,42 @@
   const preview = document.getElementById('preview');
   const fileName = document.getElementById('fileName');
 
+  // input[type=file]のクリックを横取りしてshowOpenFilePickerを使う
+  // これでファイル選択ダイアログが毎回デスクトップから開く
+  fileInput.addEventListener('click', async function(e) {
+    if (!window.showOpenFilePicker) return; // 非対応ブラウザはそのまま標準動作
+    e.preventDefault();
+    try {
+      const [fileHandle] = await window.showOpenFilePicker({
+        startIn: 'desktop',
+        types: [{ description: 'PDFファイル', accept: { 'application/pdf': ['.pdf'] } }]
+      });
+      const file = await fileHandle.getFile();
+      handleFile(file);
+    } catch (err) {
+      // キャンセル時は何もしない
+    }
+  });
+
+  // 標準のinput changeイベント(非対応ブラウザ用フォールバック)
   fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (file) handleFile(file);
+  });
+
+  function handleFile(file) {
     if (!file.name.endsWith('.pdf')) { showStatus('PDFファイルを選択してください', 'error'); return; }
     fileName.textContent = file.name;
     convertBtn.disabled = false;
+    convertBtn._selectedFile = file;
     showStatus('', '');
     preview.style.display = 'none';
-  });
+  }
 
   convertBtn.addEventListener('click', () => {
-    const file = fileInput.files[0];
+    // showOpenFilePicker経由の場合はconvertBtn._selectedFileに入ってる
+    // 標準input経由の場合はfileInput.files[0]
+    const file = convertBtn._selectedFile || fileInput.files[0];
     if (file) convertPdf(file);
   });
 

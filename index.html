@@ -43,13 +43,6 @@
     padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem;
     margin-bottom: 1.5rem; text-align: center; width: 100%;
   }
-  .file-select-btn {
-    display: block; width: 100%; padding: 1.5rem; border: 2px dashed #0f3460;
-    border-radius: 16px; background: rgba(15,52,96,0.2); color: #aaa;
-    font-family: inherit; font-size: 1rem; cursor: pointer;
-    text-align: center; transition: all 0.3s; margin-bottom: 1rem;
-  }
-  .file-select-btn:hover { border-color: #e94560; background: rgba(233,69,96,0.1); color: #eee; }
   .filename { color: #f5a623; font-weight: 700; text-align: center; margin-bottom: 1rem; min-height: 1.5rem; }
   .file-input-visible {
     display: block; width: 100%; margin-bottom: 1.5rem;
@@ -80,7 +73,7 @@
   <p class="subtitle">入力指示書PDFをExcelに変換します</p>
   <div class="badge">🔧 PAD練習用</div>
 
-  <p style="color:#aaa; font-size:0.85rem; margin-bottom:0.5rem;">フォルダ指定(PDFを開く場所 ＆ Excelの保存先):</p>
+  <p style="color:#aaa; font-size:0.85rem; margin-bottom:0.5rem;">PDFを開くフォルダ指定(初回のみ):</p>
   <button id="folderBtn" style="display:block;width:100%;padding:0.7rem;border:1px solid #0f3460;border-radius:8px;background:#1a1a2e;color:#f5a623;font-family:inherit;font-size:0.85rem;cursor:pointer;margin-bottom:1rem;text-align:left;">📂 未指定(デスクトップから開きます)</button>
 
   <p style="color:#aaa; font-size:0.85rem; margin-bottom:0.5rem;">PDFファイルを選択してください:</p>
@@ -104,7 +97,6 @@
 
   let savedDirHandle = null;
 
-  // IndexedDBにフォルダハンドルを保存・読み込み
   function openDB() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open('pdfConverterDB', 1);
@@ -131,7 +123,6 @@
     });
   }
 
-  // 起動時に保存済みフォルダがあれば読み込む
   (async () => {
     savedDirHandle = await loadDirHandle();
     if (savedDirHandle) {
@@ -139,7 +130,6 @@
     }
   })();
 
-  // フォルダ指定ボタン
   folderBtn.addEventListener('click', async () => {
     if (!window.showDirectoryPicker) {
       alert('このブラウザはフォルダ指定に対応していません');
@@ -150,12 +140,9 @@
       savedDirHandle = dirHandle;
       await saveDirHandle(dirHandle);
       folderBtn.textContent = '📂 ' + dirHandle.name + '(クリックで変更)';
-    } catch (e) {
-      // キャンセル時は何もしない
-    }
+    } catch (e) {}
   });
 
-  // ファイル選択をshowOpenFilePickerに差し替え(保存済みフォルダから開く)
   fileInput.addEventListener('click', async function(e) {
     if (!window.showOpenFilePicker) return;
     e.preventDefault();
@@ -163,20 +150,13 @@
       const opts = {
         types: [{ description: 'PDFファイル', accept: { 'application/pdf': ['.pdf'] } }]
       };
-      if (savedDirHandle) {
-        opts.startIn = savedDirHandle;
-      } else {
-        opts.startIn = 'desktop';
-      }
+      opts.startIn = savedDirHandle || 'desktop';
       const [fileHandle] = await window.showOpenFilePicker(opts);
       const file = await fileHandle.getFile();
       handleFile(file);
-    } catch (err) {
-      // キャンセル時は何もしない
-    }
+    } catch (err) {}
   });
 
-  // 標準input(非対応ブラウザ用フォールバック)
   fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) handleFile(file);
@@ -231,26 +211,7 @@
       const ws = XLSX.utils.aoa_to_sheet([headers, values]);
       XLSX.utils.book_append_sheet(wb, ws, '入力指示書');
       const outName = file.name.replace('.pdf', '.xlsx');
-
-      // 保存先フォルダが指定済みなら自動保存(ダイアログなし)
-      if (savedDirHandle && window.showDirectoryPicker) {
-        try {
-          const perm = await savedDirHandle.requestPermission({ mode: 'readwrite' });
-          if (perm === 'granted') {
-            const fileHandle = await savedDirHandle.getFileHandle(outName, { create: true });
-            const writable = await fileHandle.createWritable();
-            const xlsxData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            await writable.write(new Blob([xlsxData]));
-            await writable.close();
-          } else {
-            XLSX.writeFile(wb, outName);
-          }
-        } catch (e) {
-          XLSX.writeFile(wb, outName);
-        }
-      } else {
-        XLSX.writeFile(wb, outName);
-      }
+      XLSX.writeFile(wb, outName);
       let tableHtml = '<table><tr>';
       headers.forEach(h => tableHtml += `<th>${h}</th>`);
       tableHtml += '</tr><tr>';
@@ -258,8 +219,7 @@
       tableHtml += '</tr></table>';
       preview.innerHTML = tableHtml;
       preview.style.display = 'block';
-      const savedTo = savedDirHandle ? savedDirHandle.name + ' フォルダ' : 'ダウンロード';
-      showStatus(`✅ 変換完了！ ${outName} を ${savedTo} に保存しました`, 'success');
+      showStatus(`✅ 変換完了！ ${outName} をダウンロードしました`, 'success');
     } catch (err) {
       showStatus('変換エラー: ' + err.message, 'error');
     }
